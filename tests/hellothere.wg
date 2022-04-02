@@ -1,0 +1,5 @@
+import localfile
+define whynot {
+    localfile.print_hello_world()
+}
+export whynot

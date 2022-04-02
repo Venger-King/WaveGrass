@@ -1,11 +1,11 @@
 const fs = require('fs')
-const lex = require('./lexer')
+const parsefile = require('./parsefile')
 
 /**
  * @type { string }
  */
 let file = ''
-const version = 'v0.1.2-beta'
+const version = 'v0.1.2-stable'
 
 if (process.argv.length > 2) {
     if (process.argv[2].startsWith('-')) {
@@ -32,8 +32,10 @@ const run = async () => {
             path += '\\main.wg'
 
         }
+        if (fs.existsSync(path)) {
+            await parsefile(path)
 
-        if (fs.existsSync(path)) await lex(fs.readFileSync(path, 'utf-8'), path)
+        }
         else console.log('File not found. Make sure the file exists')
     }
 }

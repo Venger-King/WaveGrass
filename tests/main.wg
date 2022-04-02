@@ -1,3 +1,2 @@
-for i in 2 {
-    print(i)
-}
+import hellothere
+hellothere.whynot()

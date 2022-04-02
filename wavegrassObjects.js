@@ -225,7 +225,7 @@ class WaveGrassObject {
 
     __in__ = rval => {
         let iter = rval.__iterator__()
-        if (iter.__type__&& iter.__type__() == 'null') {
+        if (iter.__type__ && iter.__type__() == 'null') {
             return new WaveGrassError('TypeError', `<class ${this.__type__()}> is not iterable`)
         } else {
             if (this.__value_of__() == '') return new WaveGrassBoolean(true)
@@ -242,7 +242,7 @@ class WaveGrassObject {
 
     __of__ = rval => {
         let iter = rval.__iterator__()
-        if (iter.__type__&& iter.__type__() == 'null') {
+        if (iter.__type__ && iter.__type__() == 'null') {
             return new WaveGrassError('TypeError', `<class ${this.__type__()}> is not iterable`)
         } else {
             let value = iter.next()
@@ -550,7 +550,7 @@ class WaveGrassArray extends WaveGrassObject {
     __r_add__ = rval => {
         let iter = rval.__iterator__()
 
-        if (iter.__type__&& iter.__type__() == 'null') {
+        if (iter.__type__ && iter.__type__() == 'null') {
             return new WaveGrassError('TypeError', `<class ${this.__type__()}> is not iterable`)
         }
 
@@ -653,13 +653,14 @@ class WaveGrassArray extends WaveGrassObject {
 }
 
 class WaveGrassFunction extends WaveGrassObject {
-    constructor(name, args, statements, internal = false, belongs_to = null) {
+    constructor(name, args, statements, scope, internal = false, belongs_to = null) {
         super(`[Function ${name}]`)
         this.__type = 'method'
 
         this.__name = name
         this.__args = args
         this.__statements = statements
+        this.__scope = scope
         this.__is_internal = internal
         this.__belongs_to = belongs_to
     }
@@ -764,12 +765,39 @@ class WaveGrassNull extends WaveGrassObject {
     __set_property__ = () => new WaveGrassError('TypeError', 'Cannot set property of null')
 }
 
+class WaveGrassModule extends WaveGrassObject {
+    constructor(name, variables) {
+        super(name)
+        this.__name = name
+        /**
+         * @type { Map<string, WaveGrassObject> }
+         */
+        this.__variables = new Map(variables)
+        this.__type = 'module'
+    }
 
+    __string__ = (colored) => colored ? `\x1b[36m[Module ${this.__name}]\x1b[0m` : `[Module ${this.__name}]`
 
-const print = new WaveGrassFunction('print', ['*nargs', 'sep', 'end'], '<internal_print>', true)
-const prompt = new WaveGrassFunction('prompt', ['prompt'], '<internal_prompt>', true)
-const parseNum = new WaveGrassFunction('parseNum', ['value', 'base'], '<internal_to_num>', true)
-const _isNaN = new WaveGrassFunction('isNaN', ['value'], '<internal_isNaN>', true)
+    set = (key, value) => this.__variables.set(key, value)
+
+    __get_property__ = (name) => {
+        if (this.__variables.has(name)) return this.__variables.get(name)
+
+        if (this[name]) {
+            return this[name]
+        }
+
+        return new WaveGrassNull()
+    }
+
+    __set_property__ = () => {
+        return new WaveGrassError('TypeError', `Cannot set property of ${this.__type__()}`)
+    }
+}
+const print = new WaveGrassFunction('print', ['*nargs', 'sep', 'end'], '<internal_print>', 'global', true)
+const prompt = new WaveGrassFunction('prompt', ['prompt'], '<internal_prompt>', 'global', true)
+const parseNum = new WaveGrassFunction('parseNum', ['value', 'base'], '<internal_to_num>', 'global', true)
+const _isNaN = new WaveGrassFunction('isNaN', ['value'], '<internal_isNaN>', 'global', true)
 
 const getClassFromType = (obj) => {
     if (obj == 'number') return WaveGrassNumber
@@ -789,7 +817,7 @@ const createObject = (type, ...extra) => {
 module.exports = {
     WaveGrassObject, WaveGrassNumber, WaveGrassString,
     WaveGrassArray, WaveGrassBoolean, WaveGrassError,
-    WaveGrassFunction, WaveGrassNull,
+    WaveGrassFunction, WaveGrassNull, WaveGrassModule,
     createObject,
     print, prompt, parseNum, _isNaN
 }

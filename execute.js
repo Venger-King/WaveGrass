@@ -1,14 +1,9 @@
-/*
-TODO
-    Reframe all of this for ease of coding
-*/
-
 const throwError = require("./throwError")
-const { createObject, WaveGrassObject, WaveGrassError, WaveGrassBoolean, WaveGrassNull, print, prompt, WaveGrassNumber, parseNum, _isNaN, WaveGrassFunction, WaveGrassArray } = require("./wavegrassObjects")
+const { createObject, WaveGrassObject, WaveGrassError, WaveGrassBoolean, WaveGrassNull, print, prompt, WaveGrassNumber, parseNum, _isNaN, WaveGrassFunction, WaveGrassArray, WaveGrassModule } = require("./wavegrassObjects")
 const input = require('./modules/input/main').input
 
 /**
- * @type { { [ scope: string ]: { map: Map<string, {changeable: boolean, value: WaveGrassObject}> parent?: string }}}
+ * @type { { [ scope: string ]: { map: Map<string, {changeable: boolean, exported?: boolean, value: WaveGrassObject}> parent?: string }}}
  */
 const scopes = {
     global: {
@@ -220,6 +215,7 @@ const operate_by_operation = (opp, lhs, rhs) => {
         if (WaveGrassError.isError(value)) value = rhs.__or__(lhs)
     } else if (opp.value == '.') {
         value = lhs.__get_property__(rhs.value)
+
         if (typeof value == 'function') {
             value = new WaveGrassFunction(rhs.value, ['*n'], `<internal_${rhs.value}>`, true, lhs)
         }
@@ -237,8 +233,6 @@ const operate_by_operation = (opp, lhs, rhs) => {
         throwError(value)
     }
     return value
-
-    // return 
 }
 
 /*
@@ -388,7 +382,7 @@ const operate = async (ast, scope, depth = 0) => {
 
     if (values.length > 1) {
         let token = ast.findIndex(i => unary.includes(i.value))
-        if(token == -1) token = ast.findIndex(i => !['string', 'number', 'varialbe', 'null', 'array', 'call'].includes(i.type))
+        if (token == -1) token = ast.findIndex(i => !['string', 'number', 'varialbe', 'null', 'array', 'call'].includes(i.type))
 
         // console.log(token)
         // console.log(['string', 'number', 'varialbe', 'null', 'array', 'call'].includes(i.type))
@@ -411,6 +405,7 @@ const getValueOfVariable = (v, scope) => {
         value = scopes[s].map.get(v.value)
         if (!value) s = scopes[s].parent
         else break
+
     }
 
     return value ?? { type: 'nf' }
@@ -704,7 +699,7 @@ const run = async (ast, scope, depth_value = 0) => {
                     if (ast.rhs.type == 'method') {
                         let obj = {
                             changeable: ast.lhs.changeable,
-                            value: createObject(ast.rhs.type, ast.lhs.value, ast.rhs.args, ast.rhs.statements)
+                            value: createObject(ast.rhs.type, ast.lhs.value, ast.rhs.args, ast.rhs.statements, scope)
                         }
                         place.set(ast.lhs.value, obj)
                     } else {
@@ -732,6 +727,7 @@ const run = async (ast, scope, depth_value = 0) => {
         } else {
             if (ast.rhs.type == 'variable') {
                 let value = getValueOfVariable(ast.rhs, scope)
+
                 if (value.type == 'nf') {
                     throwError(new WaveGrassError(`Reference Error`, `'${ast.lhs.value}' is not defined`, ast.lhs.line, ast.lhs.col))
                 }
@@ -773,9 +769,9 @@ const run = async (ast, scope, depth_value = 0) => {
         WaveGrassError.trace.push(`${func.__name__().__value_of__()} (${WaveGrassError.file}:${ast.value.line}:${ast.value.col})`)
         let args = await parse_params(ast.args, scope, depth_value)
 
-        let ret = new WaveGrassNull()
-
         if (func.__internal__()) {
+            let ret = new WaveGrassNull()
+
             let internal_type = func.__get_statements__()
             if (internal_type == '<internal_print>') {
                 let sep = args.sep?.__value_of__() ?? ' '
@@ -804,9 +800,9 @@ const run = async (ast, scope, depth_value = 0) => {
             WaveGrassError.trace.pop()
             return ret
         } else {
-            let lscope = `${func.name}${depth_value}`
+            let lscope = `${func.__name__().__value_of__()}${scope}${depth_value}`
             scopes[lscope] = {
-                parent: scope,
+                parent: func.__scope,
                 map: new Map()
             }
             let params = func.__get_args__()
@@ -823,21 +819,24 @@ const run = async (ast, scope, depth_value = 0) => {
                 scopes[lscope].map.set(params[i], args[i] ?? new WaveGrassNull())
             }
 
-            let ret_val;
+            let ret_val = new WaveGrassNull();
             for (const i of func.__get_statements__()) {
                 ret_val = await run(i, lscope, depth_value + 1)
 
                 if (ret_val) {
-                    if (ret_val.type == 'return') break
+                    if (ret_val.type == 'return') {
+                        ret_val = ret_val.value
+                        break
+                    }
                 }
             }
 
             scopes[lscope] = undefined
             WaveGrassError.trace.pop()
-            return ret_val.value ?? new WaveGrassNull()
+            return ret_val
         }
     } else if (ast.type == 'if') {
-        let lscope = 'if' + depth_value
+        let lscope = `if${scope}${depth_value}`
         scopes[lscope] = {
             parent: scope,
             map: new Map()
@@ -857,7 +856,7 @@ const run = async (ast, scope, depth_value = 0) => {
                         cont = true
                         break
                     } else if (v.type == 'return') {
-                        ret = v.value
+                        ret = v
                         break
                     }
                 }
@@ -875,7 +874,7 @@ const run = async (ast, scope, depth_value = 0) => {
                                 cont = true
                                 break
                             } else if (v.type == 'return') {
-                                ret = v.value
+                                ret = v
                                 break
                             }
                         }
@@ -888,18 +887,19 @@ const run = async (ast, scope, depth_value = 0) => {
                         } else if (v.type == 'continue') {
                             cont = true
                         } else if (v.type == 'return') {
-                            ret = v.value
+                            ret = v
                         }
                     }
                 }
             }
         }
+
         scopes[lscope] = undefined
         if (br) return { type: 'break' }
         if (cont) return { type: 'continue' }
         if (ret) return ret
     } else if (ast.type == 'for') {
-        let lscope = 'for' + depth_value
+        let lscope = `for${scope}${depth_value}`
         scopes[lscope] = {
             parent: scope,
             map: new Map()
@@ -945,7 +945,7 @@ const run = async (ast, scope, depth_value = 0) => {
                         } else if (v.type == 'continue') {
                             break
                         } else if (v.type == 'return') {
-                            ret = v.value
+                            ret = v
                             break
                         }
                     }
@@ -968,7 +968,7 @@ const run = async (ast, scope, depth_value = 0) => {
                         } else if (v.type == 'continue') {
                             break
                         } else if (v.type == 'return') {
-                            ret = v.value
+                            ret = v
                             break
                         }
                     }
@@ -980,7 +980,7 @@ const run = async (ast, scope, depth_value = 0) => {
         }
         if (ret) return ret.value
     } else if (ast.type == 'while') {
-        let lscope = 'while' + depth_value
+        let lscope = `while${scope}${depth_value}`
         scopes[lscope] = {
             parent: scope,
             map: new Map()
@@ -1000,7 +1000,7 @@ const run = async (ast, scope, depth_value = 0) => {
                     } else if (v.type == 'continue') {
                         break
                     } else if (v.type == 'return') {
-                        ret = v.value
+                        ret = v
                         break
                     }
                 }
@@ -1012,12 +1012,10 @@ const run = async (ast, scope, depth_value = 0) => {
     } else if (ast.type == 'return') {
         let s = scope
         while (s) {
-            if (['for', 'while', 'if'].find(i => s.startsWith(i))) s = scopes[s].parent
-
-            if (s == 'global') throwError(new WaveGrassError('Syntax Error', 'Unexpcted token \'return\'', ast.line, ast.col))
-            else break
+            if (s == WaveGrassError.file) throwError(new WaveGrassError('Syntax Error', 'Unexpcted token \'return\'', ast.col, ast.line))
+            if (!['for', 'if', 'while'].some(i => s.startsWith(i))) break
+            s = scopes[s].parent
         }
-
         return { type: 'return', value: await operate(ast.value.type == 'operation' ? ast.value.value : ast.value, scope, depth_value) }
     } else if (ast.type == 'break') {
         let br = find_scope_that_matches(scope, ...breakable)
@@ -1036,12 +1034,51 @@ const run = async (ast, scope, depth_value = 0) => {
     } else if (ast.type == 'property') {
         let operation = [ast.lhs, ...(ast.values.type == 'operation' ? ast.values.value : [ast.values])]
         operation.splice(2, 0, { type: 'symbol', value: '.' })
-
         await operate(operation, scope, depth_value)
     } else if (ast.type == 'throw') {
-        // if (ast.value) { }
-        // else 
         throwError(new WaveGrassError('Error', 'Unexpected error occured', ast.col, ast.line))
+    } else if (ast.type == 'export') {
+        for (let i = 0; i < ast.value.length; i++) {
+            let token = ast.value[i]
+            if (token.type == 'variable') {
+                let v = getValueOfVariable(token, scope)
+                if(!v.exported) v.exported = true
+            } else if(token.type == 'operation') {
+                if(token.value.length == 1) {
+                    token = token.value[0]
+                    i--
+                } else {
+
+                    token = await operate(token.value, scope, depth_value)
+                }
+            }
+        }
+    } else if (ast.type == 'import') {
+        const parsefile = require("./parsefile")
+        let oldfile = WaveGrassError.file
+
+        WaveGrassError.trace.push(`(${WaveGrassError.file}:${ast.line}:${ast.col})`)
+
+        for (let i = 0; i < ast.value.length; i++) {
+            let token = ast.value[i]
+            if (token.type == 'variable' || token.type == 'string') {
+                let file = `${WaveGrassError.file.slice(0, WaveGrassError.file.lastIndexOf('\\') + 1)}${ast.value[i].value}${token.value.endsWith('.wg') ? '' : '.wg'}`
+                await parsefile(file)
+
+                let module = new WaveGrassModule(ast.value[i].value, [])
+                for (const [key, value] of scopes[file].map.entries()) {
+                    if (value.exported) module.set(key, value.value)
+                }
+
+                scopes[oldfile].map.set(ast.value[i].value, {
+                    changeable: true,
+                    exported: false,
+                    value: module
+                })                
+            } 
+        }
+
+        // WaveGrassError.trace.pop()
     }
 }
 
@@ -1049,7 +1086,12 @@ const run = async (ast, scope, depth_value = 0) => {
  * 
  * @param { import("./parser").Token[] } tokens 
  */
-const execute = async (tokens, scope = 'global', depth_value = 0) => {
+const execute = async (tokens, scope, depth_value = 0) => {
+    scopes[scope] = {
+        parent: 'global',
+        map: new Map()
+    }
+
     let hoists = []
     for (let i = 0; i < tokens.length; i++) {
         if (tokens[i]?.type == 'hoist') {

@@ -1,10 +1,9 @@
 const iterator = require("./iterator")
-const parse = require("./parser")
 const throwError = require("./throwError")
 const { WaveGrassError } = require("./wavegrassObjects")
 
 const keyword = [
-    "if", "else", "define", "break", "return", "continue", "let", "const", "hoist", 'while', 'for', 'in', 'of', 'throw', 'typeof'
+    "if", "else", "define", "break", "return", "continue", "let", "const", "hoist", 'while', 'for', 'in', 'of', 'throw', 'typeof', 'export', 'import', 'as', 'from'
 ]
 const brackets_map = {
     '()': 0,
@@ -138,9 +137,9 @@ const parseName = (iterable, current, line, col) => {
 
 /**
  * @param { string } fileContent The content of the file being lexed
- * @returns { Promise<boolean> }
+ * @returns { any[] }
  */
-const lex = async (fileContent, file) => {
+const lex = (fileContent, file) => {
     fileContent = fileContent.replace(/\r/g, '')
 
     let line = 1, col = 0
@@ -390,8 +389,8 @@ const lex = async (fileContent, file) => {
         }
     }
 
-    await parse(tokens)
-    return true
+    // await parse(tokens)
+    return tokens
 }
 
 module.exports = lex

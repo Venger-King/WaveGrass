@@ -1,4 +1,3 @@
-const execute = require("./execute")
 const iterator = require("./iterator")
 const throwError = require("./throwError")
 const { WaveGrassError } = require("./wavegrassObjects")
@@ -339,7 +338,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
         if (!prev) throwError(new WaveGrassError('Syntax Error', 'Unexpected token \'=\'', curr.col, curr.line))
 
         if (prev.type != 'variable' && prev.type != 'array' && prev.type != 'property') {
-            prev.value ? throwError(new WaveGrassError('TypeError', 'Can only assign values to a variable', prev.value.col, prev.value.line)) : throwError(new WaveGrassError('TypeError', 'Can only assign values to a variable', prev.col, prev.line))
+            prev.value ? throwError(new WaveGrassError('TypeError', 'Can only assign values to a variable', prev.value?.col ?? prev.col, prev.value?.line ??  prev.line)) : throwError(new WaveGrassError('TypeError', 'Can only assign values to a variable', prev.col, prev.line))
         }
 
         if (prev.changeable == null) prev.changeable = true
@@ -383,6 +382,10 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
             return to_ast(iterable, { type: 'hoist', value: to_ast(iterable, null, endat, depth) }, endat, depth)
         } else if (curr.value == 'return') {
             return to_ast(iterable, { type: 'return', value: parse_operators(accumulate_tokens(iterable, endat)), line: curr.line, col: curr.col }, endat, depth)
+        } else if (curr.value == 'export') {
+            return to_ast(iterable, { type: 'export', value: parse_params(accumulate_tokens(iterable, endat)), line: curr.line, col: curr.col }, endat, depth)
+        } else if(curr.value == 'import') {
+            return to_ast(iterable, { type: 'import', value: parse_params(accumulate_tokens(iterable, endat)), line: curr.line, col: curr.col }, endat, depth)
         } else if (curr.value == 'let') {
             return to_ast(iterable, { changeable: true }, endat, depth)
         } else if (curr.value == 'const') {
@@ -451,7 +454,6 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
                 return to_ast(iterable, prev, endat, depth)
             } else {
                 return to_ast(iterable, { ...prev, negative: condition ? { type: 'if', condition: condition, positive: block } : block }, endat, depth)
-
             }
         } else if (curr.value == 'while') {
             let condition = parse_operators(accumulate_tokens(iterable, { type: 'bracket', value: '{', depth: depth }))
@@ -658,7 +660,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
  * 
  * @param { Token[] } tokens 
  */
-const parse = async (tokens) => {
+const parse = (tokens) => {
     let iter = iterator(tokens)
     let asts = []
 
@@ -668,7 +670,7 @@ const parse = async (tokens) => {
         iter.move()
     }
 
-    await execute(asts)
+    return asts
 }
 
 module.exports = parse
