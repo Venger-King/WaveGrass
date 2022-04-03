@@ -86,6 +86,12 @@ const conditional_check = (cond, lhs, rhs) => {
         value = lhs.__in__(rhs)
     } else if (cond.value == 'of') {
         value = lhs.__of__(rhs)
+    } else if (cond.value == 'as') {
+        value = {
+            type: 'as',
+            lhs: lhs,
+            rhs: rhs
+        }
     } else {
         value = new WaveGrassBoolean(false)
     }
@@ -215,12 +221,12 @@ const operate_by_operation = (opp, lhs, rhs) => {
         if (WaveGrassError.isError(value)) value = rhs.__or__(lhs)
     } else if (opp.value == '.') {
         value = lhs.__get_property__(rhs.value)
-
         if (typeof value == 'function') {
             value = new WaveGrassFunction(rhs.value, ['*n'], `<internal_${rhs.value}>`, true, lhs)
         }
 
-        if (!(value instanceof WaveGrassObject)) value = createObject(typeof value, value)
+        if (value.changeable !== null) value = value.value
+        else if (!(value instanceof WaveGrassObject)) value = createObject(typeof value, value)
     } else if (opp.value == 'typeof') {
         value = createObject('string', lhs.__type__())
     } else {
@@ -232,6 +238,7 @@ const operate_by_operation = (opp, lhs, rhs) => {
         value.__line = opp.line
         throwError(value)
     }
+
     return value
 }
 
@@ -353,7 +360,7 @@ const operate = async (ast, scope, depth = 0) => {
                 } else {
                     let v = getValueOfVariable(vl, scope)
                     if (v.type == 'nf') {
-                        if (!ast[i + 1] || !['!', '!!', ':', '='].includes(ast[i + 1].value)) throwError(new WaveGrassError('ReferenceError', `'${vl.value}' is not defined`, vl.col, vl.line))
+                        if (!ast[i + 1] || !['!', '!!', ':', '=', 'as'].includes(ast[i + 1].value)) throwError(new WaveGrassError('ReferenceError', `'${vl.value}' is not defined`, vl.col, vl.line))
                         vl = { ...vl, type: 'nf' }
                     } else {
                         if (!ast[i + 1] || !['!', '!!', ':', '='].includes(ast[i + 1].value)) vl = v.value
@@ -383,10 +390,6 @@ const operate = async (ast, scope, depth = 0) => {
     if (values.length > 1) {
         let token = ast.findIndex(i => unary.includes(i.value))
         if (token == -1) token = ast.findIndex(i => !['string', 'number', 'varialbe', 'null', 'array', 'call'].includes(i.type))
-
-        // console.log(token)
-        // console.log(['string', 'number', 'varialbe', 'null', 'array', 'call'].includes(i.type))
-        // console.log(token)
         throwError(new WaveGrassError('Syntax Error', `Unexpected token`, ast[token - 1].col, ast[token - 1].line))
     }
     return values[0]
@@ -398,17 +401,23 @@ const operate = async (ast, scope, depth = 0) => {
  * @param { string } scope 
  * @returns { { changeable: boolean, value: WaveGrassObject } }
  */
-const getValueOfVariable = (v, scope) => {
+const getValueOfVariable = (v, scope, parse_rerference = true) => {
     let s = scope
     let value = null
     while (s) {
         value = scopes[s].map.get(v.value)
         if (!value) s = scopes[s].parent
         else break
-
     }
 
-    return value ?? { type: 'nf' }
+    if (value) {
+        if (value.refereces && parse_rerference) {
+            value = getValueOfVariable(value.refereces, s)
+        }
+        return value
+    }
+
+    return { type: 'nf' }
 }
 
 /**
@@ -715,33 +724,23 @@ const run = async (ast, scope, depth_value = 0) => {
         }
     } else if (ast.type == 'assignment2') {
         let place = scopes[find_variable_scope(ast.lhs, scope) ?? scope].map
+        if (ast.rhs.type == 'variable') {
+            let value = getValueOfVariable(ast.rhs, scope)
 
-        if (place.has(ast.lhs.value)) {
-            if (!place.get(ast.lhs.value).changeable) {
-                throwError(new WaveGrassError('TypeError', `Assignment to a constant variable '${ast.lhs.value}'`, ast.lhs.col, ast.lhs.line))
+            if (value.type == 'nf') {
+                throwError(new WaveGrassError(`Reference Error`, `'${ast.lhs.value}' is not defined`, ast.lhs.line, ast.lhs.col))
             }
-        }
-        if (ast.rhs.type == 'operation') {
-            let value = await operate(ast.rhs.value, scope, depth_value)
-            place.set(ast.lhs.value, value)
+
+            place.set(ast.lhs.value, {
+                refereces: {
+                    type: 'variable',
+                    value: ast.rhs.value
+                },
+                changeable: ast.lhs.changeable
+            })
         } else {
-            if (ast.rhs.type == 'variable') {
-                let value = getValueOfVariable(ast.rhs, scope)
-
-                if (value.type == 'nf') {
-                    throwError(new WaveGrassError(`Reference Error`, `'${ast.lhs.value}' is not defined`, ast.lhs.line, ast.lhs.col))
-                }
-                if (!scp) scopes[scope].map.set(ast.lhs.value, value)
-                else scopes[scp].map.set(ast.lhs.value, value)
-            } else if (ast.rhs.type == 'call') {
-                let val = await run(ast.rhs, scope, depth_value)
-                val = createObject(val.type, val.value)
-
-                place.set(ast.lhs.value, val)
-            } else {
-                if (!scp) scopes[scope].map.set(ast.lhs.value, createObject(ast.rhs.type, ast.rhs.value))
-                else scopes[scp].map.set(ast.lhs.value, createObject(ast.rhs.type, ast.rhs.value))
-            }
+            ast.type = 'assignment'
+            return await run(ast, scope, depth_value)
         }
         return ast.lhs
     } else if (ast.type == 'call') {
@@ -761,7 +760,6 @@ const run = async (ast, scope, depth_value = 0) => {
 
             func = func.value
         }
-
         if (func.__type != 'method') {
             throwError(new WaveGrassError(`Reference Error`, `'${ast.value.value}' is not a method`, ast.value.line, ast.value.col))
         }
@@ -783,8 +781,9 @@ const run = async (ast, scope, depth_value = 0) => {
                 ret = createObject('string', await input(await toString(args, '', scope)))
             } else if (internal_type == '<internal_to_num>') {
                 if (!args[0]) return new WaveGrassNull()
-
-                if (args[0].__value_of__().includes('.')) {
+                if (args[0].__type__() == 'number') {
+                    ret = args[0]
+                } else if (args[0].__value_of__().includes('.')) {
                     ret = createObject('number', parseFloat(args[0].__value_of__()))
                 } else
                     ret = createObject('number', parseInt(args[0].__value_of__(), 10))
@@ -1042,43 +1041,83 @@ const run = async (ast, scope, depth_value = 0) => {
             let token = ast.value[i]
             if (token.type == 'variable') {
                 let v = getValueOfVariable(token, scope)
-                if(!v.exported) v.exported = true
-            } else if(token.type == 'operation') {
-                if(token.value.length == 1) {
+                if (!v.exported) v.exported = true
+            } else if (token.type == 'operation') {
+                if (token.value.length == 1) {
                     token = token.value[0]
                     i--
                 } else {
+                    if (token.value.find(i => i.value == 'as')) {
+                        scopes[scope].map.set(token.value[1].value, {
+                            changeable: true,
+                            references: token.value[0]
+                        })
 
-                    token = await operate(token.value, scope, depth_value)
+                        let v = getValueOfVariable(token.value[1], scope, false)
+                        if (!v.exported) v.exported = true
+                    }
                 }
+            } else {
+                throwError(new WaveGrassError('SyntaxError', 'Unxpected token', ast.col, ast.line),)
             }
         }
+
     } else if (ast.type == 'import') {
         const parsefile = require("./parsefile")
         let oldfile = WaveGrassError.file
-
         WaveGrassError.trace.push(`(${WaveGrassError.file}:${ast.line}:${ast.col})`)
 
         for (let i = 0; i < ast.value.length; i++) {
             let token = ast.value[i]
             if (token.type == 'variable' || token.type == 'string') {
-                let file = `${WaveGrassError.file.slice(0, WaveGrassError.file.lastIndexOf('\\') + 1)}${ast.value[i].value}${token.value.endsWith('.wg') ? '' : '.wg'}`
+                let file = `${WaveGrassError.file.slice(0, WaveGrassError.file.lastIndexOf('\\') + 1)}${token.value}${token.value.endsWith('.wg') ? '' : '.wg'}`
                 await parsefile(file)
 
                 let module = new WaveGrassModule(ast.value[i].value, [])
                 for (const [key, value] of scopes[file].map.entries()) {
-                    if (value.exported) module.set(key, value.value)
+                    if (value.exported) {
+                        if (value.references) {
+                            module.set(key, getValueOfVariable(value.references, file))
+                        } else module.set(key, value.value)
+                    }
                 }
 
                 scopes[oldfile].map.set(ast.value[i].value, {
                     changeable: true,
                     exported: false,
                     value: module
-                })                
-            } 
-        }
+                })
+            } else if (token.type == 'operation') {
+                if (token.value.length == 1) {
+                    token = token.value[0]
+                    i--
+                } else {
+                    if (token.value.find(i => i.value == 'as')) {
+                        let file = `${WaveGrassError.file.slice(0, WaveGrassError.file.lastIndexOf('\\') + 1)}${token.value[0].value}${token.value[0].value.endsWith('.wg') ? '' : '.wg'}`
+                        await parsefile(file)
 
-        // WaveGrassError.trace.pop()
+                        let module = new WaveGrassModule(token.value[1].value, [])
+                        for (const [key, value] of scopes[file].map.entries()) {
+                            if (value.exported) {
+                                if (value.references) {
+                                    module.set(key, getValueOfVariable(value.references, file))
+                                } else module.set(key, value.value)
+                            }
+                        }
+
+                        scopes[oldfile].map.set(token.value[1].value, {
+                            changeable: true,
+                            exported: false,
+                            value: module
+                        })
+                    } else {
+                        throwError(new WaveGrassError('SyntaxError', 'Unxpected token', ast.col, ast.line),)
+                    }
+                }
+            } else {
+                throwError(new WaveGrassError('SyntaxError', 'Unxpected token', ast.col, ast.line),)
+            }
+        }
     }
 }
 

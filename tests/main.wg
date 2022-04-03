@@ -1,2 +1,4 @@
-import hellothere
-hellothere.whynot()
+import localfile as abc
+
+print(abc.b)
+print(abc.c())

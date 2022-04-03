@@ -151,12 +151,11 @@ const to_post_fix_notation = (array) => {
             result.push(token)
         } else if (token.type == 'bracket') {
             if (token.value == '(') stack.push(token)
-            else if (token.value == ')') {
+            else if (token.value == ')') {  
                 while (stack[stack.length - 1].value != '(' && stack[stack.length - 1] != token.depth) {
                     result.push(stack.pop())
                 }
                 stack.pop()
-
             } else if (token.value == '[') {
                 let foundIndex = -1
                 for (let j = i + 1; j < array.length; j++) {
@@ -165,7 +164,6 @@ const to_post_fix_notation = (array) => {
                         break
                     }
                 }
-
                 if (foundIndex < 0) {
                     throwError(new WaveGrassError('EOF Error', 'Unexpected end of input', array[i].col, array[i].line))
                 }
@@ -567,7 +565,6 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
 
             return to_ast(iterable, { type: 'for', loopvar: loopvar, condition: cond, change: step, block: block }, endat, depth)
         } else if (curr.value == 'define') {
-
             let name = iterable.next()
 
             if (!name || name.type != 'variable') {

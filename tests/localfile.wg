@@ -1,5 +1,5 @@
-define print_hello_world {
-    print('Hello, world!')
+a = 2
+define h {
+    return 69
 }
-
-export print_hello_world 
+export a as b, h as c
