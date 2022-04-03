@@ -210,6 +210,8 @@ class WaveGrassObject {
     }
 
     __get_property__ = name => {
+        if(name instanceof WaveGrassObject) name = name.__value_of__()
+
         if (['constructor', 'prototype'].includes(name)) return new WaveGrassNull()
 
         if (this.__properties[name]) return this.__properties[name]
@@ -220,6 +222,7 @@ class WaveGrassObject {
     }
 
     __set_property__ = (name, value) => {
+        if(name instanceof WaveGrassObject) name = name.__value_of__()
         this.__properties[name] = value
     }
 
@@ -581,31 +584,36 @@ class WaveGrassArray extends WaveGrassObject {
             return new WaveGrassError(`Cannot multiply <class ${rval.__type__()}> and <class array>`)
         } else {
             let arr = new WaveGrassArray({}, 0)
-            let len = this.length.__value_of__() * val
-            for (let i = 0; i < len; i++) {
-                arr.push(this.__value[i % val])
+            let len = this.length.__value_of__()
+            let arr_len = len * val
+            for (let i = 0; i < arr_len; i++) {
+                arr.push(this.__value[i % len])
             }
             return arr
         }
     }
 
     __set_property__ = (name, value) => {
+        if(name instanceof WaveGrassObject) name = name.__value_of__()
+
         if (isNaN(parseInt(name))) {
-            this.__properties[name] = value
+            this.__properties[name] = value ?? new WaveGrassNull()
         } else {
             for (let i in this.__value) {
                 if (i > name) {
-                    this.__value[name] = value
+                    this.__value[name] = value ?? new WaveGrassNull()
                     return
                 }
             }
 
             this.length.__value = name + 1
-            this.__value[`${name}`] = value
+            this.__value[`${name}`] = value ?? new WaveGrassNull()
         }
     }
 
     __get_property__ = (name) => {
+        if(name instanceof WaveGrassObject) name = name.__value_of__()
+        
         if (isNaN(parseInt(name))) {
             if (['constructor', 'prototype'].includes(name)) return new WaveGrassNull()
 
@@ -680,6 +688,8 @@ class WaveGrassFunction extends WaveGrassObject {
     __belongs_to__ = () => this.__belongs_to
 
     __get_property__ = name => {
+        if(name instanceof WaveGrassObject) name = name.__value_of__()
+
         if (['constructor', 'prototype', '__get_args__', '__get_statements__', '__internal__', '__belongs_to__'].includes(name)) return new WaveGrassNull()
 
         if (this.__properties[name]) return this.__properties[name]
@@ -781,6 +791,8 @@ class WaveGrassModule extends WaveGrassObject {
     set = (key, value) => this.__variables.set(key, value)
 
     __get_property__ = (name) => {
+        if(name instanceof WaveGrassObject) name = name.__value_of__()
+
         if (this.__variables.has(name)) return this.__variables.get(name)
 
         if (this[name]) {

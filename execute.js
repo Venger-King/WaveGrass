@@ -200,15 +200,15 @@ const operate_by_operation = (opp, lhs, rhs) => {
         if (WaveGrassError.isError(value)) value = lhs.__r_b_l_shift__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__b_l_shift__(lhs)
     } else if (opp.value == '>>') {
-        value = lhs.__b_r_us_shift__(rhs)
-        if (WaveGrassError.isError(value)) value = rhs.__r_b_r_us_shift__(lhs)
-        if (WaveGrassError.isError(value)) value = lhs.__r_b_r_us_shift__(rhs)
-        if (WaveGrassError.isError(value)) value = rhs.__b_r_us_shift__(lhs)
-    } else if (opp.value == '>>>') {
         value = lhs.__b_r_s_shift__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__r_b_r_s_shift__(lhs)
         if (WaveGrassError.isError(value)) value = lhs.__r_b_r_s_shift__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__b_r_s_shift__(lhs)
+    } else if (opp.value == '>>>') {
+        value = lhs.__b_r_us_shift__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__r_b_r_us_shift__(lhs)
+        if (WaveGrassError.isError(value)) value = lhs.__r_b_r_us_shift__(rhs)
+        if (WaveGrassError.isError(value)) value = rhs.__b_r_us_shift__(lhs)
     } else if (opp.value == '&&') {
         value = lhs.__and__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__r_and__(lhs)
@@ -222,11 +222,14 @@ const operate_by_operation = (opp, lhs, rhs) => {
     } else if (opp.value == '.') {
         value = lhs.__get_property__(rhs.value)
         if (typeof value == 'function') {
-            value = new WaveGrassFunction(rhs.value, ['*n'], `<internal_${rhs.value}>`, true, lhs)
+            value = new WaveGrassFunction(rhs.value, ['*n'], `<internal_${rhs.value}>`, WaveGrassError.file, true, lhs)
         }
+        if(value instanceof WaveGrassObject) {
 
-        if (value.changeable !== null) value = value.value
-        else if (!(value instanceof WaveGrassObject)) value = createObject(typeof value, value)
+        } else {
+            if (value.changeable !== null) value = value.value
+            else value = createObject(typeof value, value)
+        }
     } else if (opp.value == 'typeof') {
         value = createObject('string', lhs.__type__())
     } else {
@@ -349,11 +352,13 @@ const operate = async (ast, scope, depth = 0) => {
             let vl = ast[i]
             if (vl.type == 'call') {
                 let variable = values.pop()
+
                 if (variable.__type__() == 'method') {
                     vl.value = variable
                     vl = await run(vl, scope, depth)
+                    // console.log(vl)
                 } else {
-                    throwError(new WaveGrassError('TypeError', `'${variable.__value_of__()}' of <class ${variable.__type__()}> is not callabe`, vl.col, vl.line))
+                    throwError(new WaveGrassError('TypeError', `'${ast[i - 1].value != '.' ? ast[i - 1].value : ast[i - 2].value}' of <class ${variable.__type__()}> is not callable`, vl.col, vl.line))
                 }
             } else if (vl.type == 'variable') {
                 if (ast[i + 1] && ast[i + 1].value == '.') {
@@ -768,7 +773,7 @@ const run = async (ast, scope, depth_value = 0) => {
         let args = await parse_params(ast.args, scope, depth_value)
 
         if (func.__internal__()) {
-            let ret = new WaveGrassNull()
+            let ret;
 
             let internal_type = func.__get_statements__()
             if (internal_type == '<internal_print>') {
@@ -797,7 +802,7 @@ const run = async (ast, scope, depth_value = 0) => {
                 }
             }
             WaveGrassError.trace.pop()
-            return ret
+            return ret ?? new WaveGrassNull()
         } else {
             let lscope = `${func.__name__().__value_of__()}${scope}${depth_value}`
             scopes[lscope] = {

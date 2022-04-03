@@ -1,4 +1,1 @@
-import localfile as abc
-
-print(abc.b)
-print(abc.c())
+print(,)
