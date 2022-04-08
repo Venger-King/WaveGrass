@@ -810,6 +810,8 @@ const print = new WaveGrassFunction('print', ['*nargs', 'sep', 'end'], '<interna
 const prompt = new WaveGrassFunction('prompt', ['prompt'], '<internal_prompt>', 'global', true)
 const parseNum = new WaveGrassFunction('parseNum', ['value', 'base'], '<internal_to_num>', 'global', true)
 const _isNaN = new WaveGrassFunction('isNaN', ['value'], '<internal_isNaN>', 'global', true)
+const _import = new WaveGrassFunction('isNaN', ['value'], '<internal_import>', 'global', true)
+
 
 const getClassFromType = (obj) => {
     if (obj == 'number') return WaveGrassNumber
@@ -831,5 +833,5 @@ module.exports = {
     WaveGrassArray, WaveGrassBoolean, WaveGrassError,
     WaveGrassFunction, WaveGrassNull, WaveGrassModule,
     createObject,
-    print, prompt, parseNum, _isNaN
+    print, prompt, parseNum, _isNaN, _import
 }

@@ -1,6 +1,10 @@
 const throwError = require("./throwError")
-const { createObject, WaveGrassObject, WaveGrassError, WaveGrassBoolean, WaveGrassNull, print, prompt, WaveGrassNumber, parseNum, _isNaN, WaveGrassFunction, WaveGrassArray, WaveGrassModule } = require("./wavegrassObjects")
-const input = require('./modules/input/main').input
+const { createObject,
+    WaveGrassObject, WaveGrassError, WaveGrassBoolean, WaveGrassNull,
+    WaveGrassNumber, WaveGrassFunction, WaveGrassArray, WaveGrassModule,
+    print, prompt, parseNum, _isNaN, _import
+} = require("./wavegrassObjects")
+const input = require('input').input
 
 /**
  * @type { { [ scope: string ]: { map: Map<string, {changeable: boolean, exported?: boolean, value: WaveGrassObject}> parent?: string }}}
@@ -18,6 +22,7 @@ scopes['global'].map.set('print', { value: print, changeable: true })
 scopes['global'].map.set('prompt', { value: prompt, changeable: true })
 scopes['global'].map.set('parseNum', { value: parseNum, changeable: true })
 scopes['global'].map.set('isNaN', { value: _isNaN, changeable: true })
+scopes['global'].map.set('import', { value: _import, changeable: true })
 
 
 const unary = ['!', '~', '!!', '~~', '_-', '_+', '++', '_++', '--', '_--', 'property', 'typeof']
@@ -224,7 +229,7 @@ const operate_by_operation = (opp, lhs, rhs) => {
         if (typeof value == 'function') {
             value = new WaveGrassFunction(rhs.value, ['*n'], `<internal_${rhs.value}>`, WaveGrassError.file, true, lhs)
         }
-        if(value instanceof WaveGrassObject) {
+        if (value instanceof WaveGrassObject) {
 
         } else {
             if (value.changeable !== null) value = value.value
@@ -352,13 +357,13 @@ const operate = async (ast, scope, depth = 0) => {
             let vl = ast[i]
             if (vl.type == 'call') {
                 let variable = values.pop()
-
                 if (variable.__type__() == 'method') {
                     vl.value = variable
                     vl = await run(vl, scope, depth)
-                    // console.log(vl)
                 } else {
-                    throwError(new WaveGrassError('TypeError', `'${ast[i - 1].value != '.' ? ast[i - 1].value : ast[i - 2].value}' of <class ${variable.__type__()}> is not callable`, vl.col, vl.line))
+                    if (ast[i - 1].value == '.') {
+                        throwError(new WaveGrassError('TypeError', `'${ast[i - 2].value}' of '${ast[i - 3].value}' is not callable or doesn't exist`, vl.col, vl.line))
+                    } else throwError(new WaveGrassError('TypeError', `'${ast[i - 1].value}' is not callable`, vl.col, vl.line))
                 }
             } else if (vl.type == 'variable') {
                 if (ast[i + 1] && ast[i + 1].value == '.') {
@@ -668,6 +673,7 @@ const run = async (ast, scope, depth_value = 0) => {
             await assign_property(ast.lhs.lhs, ast.lhs.ktype, ast.lhs.values, ast.rhs, scope)
         } else {
             let place = scopes[find_variable_scope(ast.lhs, scope) ?? scope].map
+
             if (place.has(ast.lhs.value)) {
                 if (!place.get(ast.lhs.value).changeable) {
                     throwError(new WaveGrassError('TypeError', `Assignment to a constant variable '${ast.lhs.value}'`, ast.lhs.col, ast.lhs.line))
@@ -771,11 +777,10 @@ const run = async (ast, scope, depth_value = 0) => {
 
         WaveGrassError.trace.push(`${func.__name__().__value_of__()} (${WaveGrassError.file}:${ast.value.line}:${ast.value.col})`)
         let args = await parse_params(ast.args, scope, depth_value)
-
         if (func.__internal__()) {
             let ret;
-
             let internal_type = func.__get_statements__()
+
             if (internal_type == '<internal_print>') {
                 let sep = args.sep?.__value_of__() ?? ' '
                 let end = args.end?.__value_of__() ?? '\n'
@@ -795,14 +800,29 @@ const run = async (ast, scope, depth_value = 0) => {
             } else if (internal_type == '<internal_isNaN>') {
                 if (isNaN(args[0].__value_of__())) ret = new WaveGrassBoolean(true)
                 else ret = new WaveGrassBoolean(false)
-            } else {
-                if (func.__belongs_to__()) {
-                    ret = func.__belongs_to__()[func.__name__().__string__()](...args)
-                    if (!(ret instanceof WaveGrassObject)) ret = createObject(typeof ret, ret)
-                }
+            } else if(internal_type == '<internal_import>') {
+                const parsefile = require("./parsefile")
+                let oldfile = WaveGrassError.file
+                WaveGrassError.trace.push(`(${WaveGrassError.file}:${ast.line}:${ast.col})`)
+
+                let path = args[0].__value_of__().replace(/\//g, '\\')
+                let file = `${WaveGrassError.file.slice(0, WaveGrassError.file.lastIndexOf('\\') + 1)}${path}${path.endsWith('.wg') ? '' : '.wg'}`
+
+                file = await parsefile(file)
+
+                let mod = new WaveGrassModule(args[0].__value_of__(), [])
+                for (const [key, value] of scopes[file].map.entries()) {
+                    if (value.exported) {
+                        if (value.references) {
+                            mod.set(key, getValueOfVariable(value.references, file))
+                        } else mod.set(key, value.value)
+                    }
+                } 
+
+                WaveGrassError.file = oldfile
+                ret = mod
             }
-            WaveGrassError.trace.pop()
-            return ret ?? new WaveGrassNull()
+            return ret
         } else {
             let lscope = `${func.__name__().__value_of__()}${scope}${depth_value}`
             scopes[lscope] = {
@@ -1075,6 +1095,7 @@ const run = async (ast, scope, depth_value = 0) => {
         for (let i = 0; i < ast.value.length; i++) {
             let token = ast.value[i]
             if (token.type == 'variable' || token.type == 'string') {
+                token.value = token.value.replace(/\//g, '\\')
                 let file = `${WaveGrassError.file.slice(0, WaveGrassError.file.lastIndexOf('\\') + 1)}${token.value}${token.value.endsWith('.wg') ? '' : '.wg'}`
                 await parsefile(file)
 
@@ -1098,6 +1119,7 @@ const run = async (ast, scope, depth_value = 0) => {
                     i--
                 } else {
                     if (token.value.find(i => i.value == 'as')) {
+                        token.value[0].value = token.value[0].value.replace(/\//g, '\\')
                         let file = `${WaveGrassError.file.slice(0, WaveGrassError.file.lastIndexOf('\\') + 1)}${token.value[0].value}${token.value[0].value.endsWith('.wg') ? '' : '.wg'}`
                         await parsefile(file)
 

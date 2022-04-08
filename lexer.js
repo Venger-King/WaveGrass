@@ -3,7 +3,7 @@ const throwError = require("./throwError")
 const { WaveGrassError } = require("./wavegrassObjects")
 
 const keyword = [
-    "if", "else", "define", "break", "return", "continue", "let", "const", "hoist", 'while', 'for', 'in', 'of', 'throw', 'typeof', 'export', 'import', 'as', 'from'
+    "if", "else", "define", "break", "return", "continue", "let", "const", "hoist", 'while', 'for', 'in', 'of', 'throw', 'typeof', 'export', 'as'
 ]
 const brackets_map = {
     '()': 0,

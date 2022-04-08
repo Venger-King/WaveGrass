@@ -1,5 +1,4 @@
-import localfile
 define whynot {
-    localfile.print_hello_world()
+    return 9
 }
 export whynot
