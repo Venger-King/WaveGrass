@@ -4,6 +4,7 @@ const { createObject,
     WaveGrassNumber, WaveGrassFunction, WaveGrassArray, WaveGrassModule,
     print, prompt, parseNum, _isNaN, _import
 } = require("./wavegrassObjects")
+const { wrap, unwrap } = require("./wrap")
 const input = require('input').input
 
 /**
@@ -755,6 +756,9 @@ const run = async (ast, scope, depth_value = 0) => {
         }
         return ast.lhs
     } else if (ast.type == 'call') {
+        /**
+         * @type { WaveGrassFunction || { type: 'variable', value: any}}
+         */
         let func;
         if (ast.value.__type__) {
             if (ast.value.__type__() == 'method') {
@@ -800,7 +804,7 @@ const run = async (ast, scope, depth_value = 0) => {
             } else if (internal_type == '<internal_isNaN>') {
                 if (isNaN(args[0].__value_of__())) ret = new WaveGrassBoolean(true)
                 else ret = new WaveGrassBoolean(false)
-            } else if(internal_type == '<internal_import>') {
+            } else if (internal_type == '<internal_import>') {
                 const parsefile = require("./parsefile")
                 let oldfile = WaveGrassError.file
                 WaveGrassError.trace.push(`(${WaveGrassError.file}:${ast.line}:${ast.col})`)
@@ -817,12 +821,21 @@ const run = async (ast, scope, depth_value = 0) => {
                             mod.set(key, getValueOfVariable(value.references, file))
                         } else mod.set(key, value.value)
                     }
-                } 
+                }
 
                 WaveGrassError.file = oldfile
                 ret = mod
+            } else {
+                if (func.__belongs_to__()) {
+                    ret = func.__belongs_to__()[func.__name__().__string__()](...args)
+                    if (!(ret instanceof WaveGrassObject)) ret = createObject(typeof ret, ret)
+                }
             }
             return ret
+        } else if (func.__native__()) {
+            ret = wrap({
+                'return': func.__native_function__()(...args.map(i => unwrap({ 'arg': i })['arg']))
+            })['return']
         } else {
             let lscope = `${func.__name__().__value_of__()}${scope}${depth_value}`
             scopes[lscope] = {

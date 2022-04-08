@@ -661,7 +661,7 @@ class WaveGrassArray extends WaveGrassObject {
 }
 
 class WaveGrassFunction extends WaveGrassObject {
-    constructor(name, args, statements, scope, internal = false, belongs_to = null) {
+    constructor(name, args, statements, scope, internal = false, belongs_to = null, native = false, native_code = null) {
         super(`[Function ${name}]`)
         this.__type = 'method'
 
@@ -671,6 +671,8 @@ class WaveGrassFunction extends WaveGrassObject {
         this.__scope = scope
         this.__is_internal = internal
         this.__belongs_to = belongs_to
+        this.__native = native
+        this.__native_function = native_code
     }
 
     __string__ = (colored) => colored ? `\x1b[36m[Function ${this.__name__().__value_of__()}]\x1b[0m` : `[Function ${this.__name__().__value_of__()}]`
@@ -685,12 +687,16 @@ class WaveGrassFunction extends WaveGrassObject {
 
     __internal__ = () => this.__is_internal
 
+    __native__ = () => this.__native
+
+    __native_function__ = () => this.__native_function 
+
     __belongs_to__ = () => this.__belongs_to
 
     __get_property__ = name => {
         if(name instanceof WaveGrassObject) name = name.__value_of__()
 
-        if (['constructor', 'prototype', '__get_args__', '__get_statements__', '__internal__', '__belongs_to__'].includes(name)) return new WaveGrassNull()
+        if (['constructor', 'prototype', '__get_args__', '__get_statements__', '__internal__', '__belongs_to__', '__native__', '__native_function__'].includes(name)) return new WaveGrassNull()
 
         if (this.__properties[name]) return this.__properties[name]
 
