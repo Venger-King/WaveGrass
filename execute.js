@@ -2,7 +2,7 @@ const throwError = require("./throwError")
 const { createObject,
     WaveGrassObject, WaveGrassError, WaveGrassBoolean, WaveGrassNull,
     WaveGrassNumber, WaveGrassFunction, WaveGrassArray, WaveGrassModule,
-    print, prompt, parseNum, _isNaN, _import
+    print, prompt, parseNum, _isNaN, _import, _importJS
 } = require("./wavegrassObjects")
 const { wrap, unwrap } = require("./wrap")
 const input = require('input').input
@@ -24,6 +24,12 @@ scopes['global'].map.set('prompt', { value: prompt, changeable: true })
 scopes['global'].map.set('parseNum', { value: parseNum, changeable: true })
 scopes['global'].map.set('isNaN', { value: _isNaN, changeable: true })
 scopes['global'].map.set('import', { value: _import, changeable: true })
+scopes['global'].map.set('importJS', { value: _importJS, changeable: true })
+
+// scopes['global'].map.set('add', {
+//     changeable: false,
+//     value: new WaveGrassFunction('add', ['*n'], '<native-code>', 'global', false, null, true, (a, b) => { return a + b})
+// })
 
 
 const unary = ['!', '~', '!!', '~~', '_-', '_+', '++', '_++', '--', '_--', 'property', 'typeof']
@@ -764,7 +770,7 @@ const run = async (ast, scope, depth_value = 0) => {
             if (ast.value.__type__() == 'method') {
                 func = ast.value
             } else {
-                throwError(new WaveGrassError('TypeError', `${ast.value.__type__()} is not callabe`, ast.col, ast.line))
+                throwError(new WaveGrassError('TypeError', `${ast.value.__type__()} is not callalbe`, ast.col, ast.line))
             }
         } else {
             func = getValueOfVariable(ast.value, scope)
@@ -781,6 +787,7 @@ const run = async (ast, scope, depth_value = 0) => {
 
         WaveGrassError.trace.push(`${func.__name__().__value_of__()} (${WaveGrassError.file}:${ast.value.line}:${ast.value.col})`)
         let args = await parse_params(ast.args, scope, depth_value)
+
         if (func.__internal__()) {
             let ret;
             let internal_type = func.__get_statements__()
@@ -810,16 +817,37 @@ const run = async (ast, scope, depth_value = 0) => {
                 WaveGrassError.trace.push(`(${WaveGrassError.file}:${ast.line}:${ast.col})`)
 
                 let path = args[0].__value_of__().replace(/\//g, '\\')
-                let file = `${WaveGrassError.file.slice(0, WaveGrassError.file.lastIndexOf('\\') + 1)}${path}${path.endsWith('.wg') ? '' : '.wg'}`
+                let file = `${WaveGrassError.file.slice(0, WaveGrassError.file.lastIndexOf('\\') + 1)}${path}`
 
-                file = await parsefile(file)
-
-                let mod = new WaveGrassModule(args[0].__value_of__(), [])
+                file = await parsefile(file, true)
+                let mod = new WaveGrassObject(args[0].__value_of__())
                 for (const [key, value] of scopes[file].map.entries()) {
                     if (value.exported) {
                         if (value.references) {
-                            mod.set(key, getValueOfVariable(value.references, file))
-                        } else mod.set(key, value.value)
+                            mod.__set_property__(key, getValueOfVariable(value.references, file))
+                        } else mod.__set_property__(key, value.value)
+                    }
+                }
+
+                WaveGrassError.file = oldfile
+                ret = mod
+            } else if (internal_type == '<internal_importJS>') {
+                const parsefile = require("./parsefile")
+                let oldfile = WaveGrassError.file
+                WaveGrassError.trace.push(`(${WaveGrassError.file}:${ast.line}:${ast.col})`)
+
+                let path = args[0].__value_of__().replace(/\//g, '\\')
+                let file = `${WaveGrassError.file.slice(0, WaveGrassError.file.lastIndexOf('\\') + 1)}${path}`
+
+                file = await parsefile(file)
+                let mod = new WaveGrassObject(args[0].__value_of__())
+
+                if (file['$$']) {
+                    let key = Object.keys(file['$$'].__properties)[0]
+                    mod.__set_property__(key, file['$$'].__get_property__(key))
+                } else {
+                    for (const [key, value] of Object.entries(file)) {
+                        mod.__set_property__(key, value)
                     }
                 }
 
@@ -833,7 +861,7 @@ const run = async (ast, scope, depth_value = 0) => {
             }
             return ret
         } else if (func.__native__()) {
-            ret = wrap({
+            return wrap({
                 'return': func.__native_function__()(...args.map(i => unwrap({ 'arg': i })['arg']))
             })['return']
         } else {
@@ -1187,5 +1215,6 @@ const execute = async (tokens, scope, depth_value = 0) => {
         await run(i, scope, depth_value, tokens.filedata)
     }
 }
+
 
 module.exports = execute

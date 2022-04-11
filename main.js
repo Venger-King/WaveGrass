@@ -33,7 +33,7 @@ const run = async () => {
 
         }
         if (fs.existsSync(path)) {
-            await parsefile(path)
+            await parsefile(path, true)
 
         }
         else console.log('File not found. Make sure the file exists')

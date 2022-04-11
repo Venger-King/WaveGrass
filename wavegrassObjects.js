@@ -12,7 +12,7 @@ class WaveGrassObject {
     __mutable__ = () => this.__mutable
 
     __string__ = (colored) => {
-        return colored ? '\x1b[36m[Object Object]\x1b[0m' : '[Object object]'
+        return colored ? '\x1b[36m[object]\x1b[0m' : '[object]'
     }
 
     __value_of__ = () => {
@@ -817,6 +817,7 @@ const prompt = new WaveGrassFunction('prompt', ['prompt'], '<internal_prompt>', 
 const parseNum = new WaveGrassFunction('parseNum', ['value', 'base'], '<internal_to_num>', 'global', true)
 const _isNaN = new WaveGrassFunction('isNaN', ['value'], '<internal_isNaN>', 'global', true)
 const _import = new WaveGrassFunction('isNaN', ['value'], '<internal_import>', 'global', true)
+const _importJS = new WaveGrassFunction('isNaN', ['value'], '<internal_importJS>', 'global', true)
 
 
 const getClassFromType = (obj) => {
@@ -839,5 +840,5 @@ module.exports = {
     WaveGrassArray, WaveGrassBoolean, WaveGrassError,
     WaveGrassFunction, WaveGrassNull, WaveGrassModule,
     createObject,
-    print, prompt, parseNum, _isNaN, _import
+    print, prompt, parseNum, _isNaN, _import, _importJS
 }
