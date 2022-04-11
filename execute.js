@@ -840,19 +840,20 @@ const run = async (ast, scope, depth_value = 0) => {
                 let file = `${WaveGrassError.file.slice(0, WaveGrassError.file.lastIndexOf('\\') + 1)}${path}`
 
                 file = await parsefile(file)
-                let mod = new WaveGrassObject(args[0].__value_of__())
 
                 if (file['$$']) {
                     let key = Object.keys(file['$$'].__properties)[0]
-                    mod.__set_property__(key, file['$$'].__get_property__(key))
+                    ret = file['$$'].__get_property__(key)
                 } else {
+                    let mod = new WaveGrassObject(args[0].__value_of__())
+
                     for (const [key, value] of Object.entries(file)) {
                         mod.__set_property__(key, value)
                     }
+                    ret = mod
                 }
 
                 WaveGrassError.file = oldfile
-                ret = mod
             } else {
                 if (func.__belongs_to__()) {
                     ret = func.__belongs_to__()[func.__name__().__string__()](...args)
