@@ -14,7 +14,10 @@ const brackets_map = {
 const char_map = {
     't': '\t',
     's': '\s',
-    '\\': '\\'
+    '\\': '\\',
+    'n': '\n',
+    'r': '\r',
+    'f': '\f'
 }
 
 let brackets_map_key = Object.keys(brackets_map)

@@ -210,7 +210,7 @@ class WaveGrassObject {
     }
 
     __get_property__ = name => {
-        if(name instanceof WaveGrassObject) name = name.__value_of__()
+        if (name instanceof WaveGrassObject) name = name.__value_of__()
 
         if (['constructor', 'prototype'].includes(name)) return new WaveGrassNull()
 
@@ -222,7 +222,7 @@ class WaveGrassObject {
     }
 
     __set_property__ = (name, value) => {
-        if(name instanceof WaveGrassObject) name = name.__value_of__()
+        if (name instanceof WaveGrassObject) name = name.__value_of__()
         this.__properties[name] = value
     }
 
@@ -594,7 +594,7 @@ class WaveGrassArray extends WaveGrassObject {
     }
 
     __set_property__ = (name, value) => {
-        if(name instanceof WaveGrassObject) name = name.__value_of__()
+        if (name instanceof WaveGrassObject) name = name.__value_of__()
 
         if (isNaN(parseInt(name))) {
             this.__properties[name] = value ?? new WaveGrassNull()
@@ -612,8 +612,8 @@ class WaveGrassArray extends WaveGrassObject {
     }
 
     __get_property__ = (name) => {
-        if(name instanceof WaveGrassObject) name = name.__value_of__()
-        
+        if (name instanceof WaveGrassObject) name = name.__value_of__()
+
         if (isNaN(parseInt(name))) {
             if (['constructor', 'prototype'].includes(name)) return new WaveGrassNull()
 
@@ -689,12 +689,12 @@ class WaveGrassFunction extends WaveGrassObject {
 
     __native__ = () => this.__native
 
-    __native_function__ = () => this.__native_function 
+    __native_function__ = () => this.__native_function
 
     __belongs_to__ = () => this.__belongs_to
 
     __get_property__ = name => {
-        if(name instanceof WaveGrassObject) name = name.__value_of__()
+        if (name instanceof WaveGrassObject) name = name.__value_of__()
 
         if (['constructor', 'prototype', '__get_args__', '__get_statements__', '__internal__', '__belongs_to__', '__native__', '__native_function__'].includes(name)) return new WaveGrassNull()
 
@@ -720,13 +720,13 @@ class WaveGrassBoolean extends WaveGrassObject {
     }
 
     __add__ = (rval) => {
-        if (rval.__type__() == 'number') return new WaveGrassNumber(0).__add__(rval)
+        if (rval.__type__() == 'number') return new WaveGrassNumber(this.__value ? 1 : 0).__add__(rval)
         if (rval.__type__() == 'string') return new WaveGrassString(this.__value_of__().toString()).__add__(rval)
         new WaveGrassError('TypeError', `Cannot add <class ${this.__type__()}> and <class ${rval.__type__()}>`)
     }
 
     __r_add__ = (rval) => {
-        if (rval.__type__() == 'number') return new WaveGrassNumber(0).__add__(rval)
+        if (rval.__type__() == 'number') return new WaveGrassNumber(this.__value ? 1 : 0).__add__(rval)
         if (rval.__type__() == 'string') return rval.__add__(new WaveGrassString(this.__value_of__().toString()))
         new WaveGrassError('TypeError', `Cannot add <class ${rval.__type__()}> and <class ${this.__type__()}>`)
     }
@@ -797,7 +797,7 @@ class WaveGrassModule extends WaveGrassObject {
     set = (key, value) => this.__variables.set(key, value)
 
     __get_property__ = (name) => {
-        if(name instanceof WaveGrassObject) name = name.__value_of__()
+        if (name instanceof WaveGrassObject) name = name.__value_of__()
 
         if (this.__variables.has(name)) return this.__variables.get(name)
 
@@ -818,6 +818,9 @@ const parseNum = new WaveGrassFunction('parseNum', ['value', 'base'], '<internal
 const _isNaN = new WaveGrassFunction('isNaN', ['value'], '<internal_isNaN>', 'global', true)
 const _import = new WaveGrassFunction('isNaN', ['value'], '<internal_import>', 'global', true)
 const _importJS = new WaveGrassFunction('isNaN', ['value'], '<internal_importJS>', 'global', true)
+const _JSON = new WaveGrassObject()
+
+_JSON.__set_property__('toStr', new WaveGrassFunction('toStr', ['obj', 'indent', 'replace'], '<internal_JSON_str>', 'global', true))
 
 
 const getClassFromType = (obj) => {
@@ -832,7 +835,7 @@ const createObject = (type, ...extra) => {
     if (['number', 'string', 'method', 'array', 'boolean', 'null'].includes(type)) {
         let obj = new (getClassFromType(type))(...extra)
         return obj
-    }
+    } 
 }
 
 module.exports = {
@@ -840,5 +843,5 @@ module.exports = {
     WaveGrassArray, WaveGrassBoolean, WaveGrassError,
     WaveGrassFunction, WaveGrassNull, WaveGrassModule,
     createObject,
-    print, prompt, parseNum, _isNaN, _import, _importJS
+    print, prompt, parseNum, _isNaN, _import, _importJS, _JSON
 }

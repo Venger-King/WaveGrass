@@ -2,7 +2,7 @@ const throwError = require("./throwError")
 const { createObject,
     WaveGrassObject, WaveGrassError, WaveGrassBoolean, WaveGrassNull,
     WaveGrassNumber, WaveGrassFunction, WaveGrassArray, WaveGrassModule,
-    print, prompt, parseNum, _isNaN, _import, _importJS
+    print, prompt, parseNum, _isNaN, _import, _importJS, _JSON
 } = require("./wavegrassObjects")
 const { wrap, unwrap } = require("./wrap")
 const input = require('input').input
@@ -25,6 +25,7 @@ scopes['global'].map.set('parseNum', { value: parseNum, changeable: true })
 scopes['global'].map.set('isNaN', { value: _isNaN, changeable: true })
 scopes['global'].map.set('import', { value: _import, changeable: true })
 scopes['global'].map.set('importJS', { value: _importJS, changeable: true })
+scopes['global'].map.set('JSON', { value: _JSON, changeable: true})
 
 // scopes['global'].map.set('add', {
 //     changeable: false,
@@ -136,9 +137,12 @@ const operate_by_operation = (opp, lhs, rhs) => {
     let value = null
     if (opp.value == '+') {
         value = lhs.__add__(rhs);
+        console.log(lhs.__add__(rhs))
+
         if (WaveGrassError.isError(value)) value = rhs.__r_add__(lhs)
         if (WaveGrassError.isError(value)) value = lhs.__r_add__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__add__(rhs)
+        console.log(value)
     } else if (opp.value == '-') {
         value = lhs.__sub__(rhs)
         if (WaveGrassError.isError(value)) value = rhs.__r_sub__(lhs)
@@ -233,6 +237,7 @@ const operate_by_operation = (opp, lhs, rhs) => {
         if (WaveGrassError.isError(value)) value = rhs.__or__(lhs)
     } else if (opp.value == '.') {
         value = lhs.__get_property__(rhs.value)
+
         if (typeof value == 'function') {
             value = new WaveGrassFunction(rhs.value, ['*n'], `<internal_${rhs.value}>`, WaveGrassError.file, true, lhs)
         }
@@ -339,7 +344,6 @@ const operate = async (ast, scope, depth = 0) => {
         } else if (ast[i].type == 'symbol') {
             if (ast[i].value == ':') {
                 let lhs = values.pop(), rhs = await operate(ast[i].to_operate.type == 'operation' ? ast[i].to_operate.value : ast[i].to_operate)
-
                 values.push({ type: 'property', lhs: lhs, rhs: rhs })
                 let v = ast.slice(i + 1, ast.length).find(i => i.value == ':')
                 if (v) {
@@ -347,7 +351,6 @@ const operate = async (ast, scope, depth = 0) => {
                 }
             } else if (ast[i].value == '=') {
                 let lhs = values.pop(), rhs = ast[i].to_operate
-
                 await run({
                     type: 'assignment',
                     lhs: lhs,
@@ -397,8 +400,21 @@ const operate = async (ast, scope, depth = 0) => {
                         len++
                     }
                     vl = new WaveGrassArray(vl.values, len)
-                }
-                else if (!(vl instanceof WaveGrassObject)) vl = createObject(vl.type, vl.value)
+                } else if(vl.type == 'object') {
+                    let obj = new WaveGrassObject('*')
+                    for(let j in vl.values) {
+                        let [key, value] = vl.values[j].value
+                        // key = await operate(key)
+                        // if(key.type == 'array') {
+                        //     // key = await operate(key)
+                        // }
+                        if(!value || value.type != 'symbol' || value.value != ':') throwError()
+                        // console.log(value.to_operate)
+                        obj.__set_property__(key.value, await operate(value.to_operate))
+                    }
+
+                    vl = obj
+                } else if (!(vl instanceof WaveGrassObject)) vl = createObject(vl.type, vl.value)
             }
             values.push(vl)
         }
@@ -409,6 +425,7 @@ const operate = async (ast, scope, depth = 0) => {
         if (token == -1) token = ast.findIndex(i => !['string', 'number', 'varialbe', 'null', 'array', 'call'].includes(i.type))
         throwError(new WaveGrassError('Syntax Error', `Unexpected token`, ast[token - 1].col, ast[token - 1].line))
     }
+
     return values[0]
 }
 
@@ -686,6 +703,7 @@ const run = async (ast, scope, depth_value = 0) => {
                     throwError(new WaveGrassError('TypeError', `Assignment to a constant variable '${ast.lhs.value}'`, ast.lhs.col, ast.lhs.line))
                 }
             }
+
             if (ast.rhs.type == 'operation') {
                 let value = {
                     changeable: ast.lhs.changeable ?? true,
@@ -854,13 +872,17 @@ const run = async (ast, scope, depth_value = 0) => {
                 }
 
                 WaveGrassError.file = oldfile
+            } else if(/^<internal_JSON_\w+>$/.test(internal_type)) {
+                if(internal_type == '<internal_JSON_str>') {
+                    // console.log('here')
+                }
             } else {
                 if (func.__belongs_to__()) {
                     ret = func.__belongs_to__()[func.__name__().__string__()](...args)
                     if (!(ret instanceof WaveGrassObject)) ret = createObject(typeof ret, ret)
                 }
             }
-            return ret
+            return ret ?? new WaveGrassNull()
         } else if (func.__native__()) {
             return wrap({
                 'return': func.__native_function__()(...args.map(i => unwrap({ 'arg': i })['arg']))

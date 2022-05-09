@@ -76,19 +76,36 @@ const non_operator_types = ['number', 'string', 'array', 'boolean', 'variable', 
  */
 const accumulate_tokens = (iterable, endat) => {
     let tokens = []
-    if (endat.depth !== null) while (iterable.next()) {
+    let prev
 
-        let curr = iterable.next()
-        if (curr.type == endat.type && curr.value == endat.value && curr.depth == endat.depth) break
+    if (endat.depth !== undefined) {
+        while (iterable.next()) {
+            let curr = iterable.next()
+            if (curr.type == endat.type && curr.value == endat.value && curr.depth == endat.depth) break
 
-        tokens.push(curr)
-        iterable.move()
-    } else while (iterable.next()) {
-        let curr = iterable.next()
-        if (curr.type == endat.type && curr.value == endat.value) break
+            tokens.push(curr)
+            iterable.move()
+        }
+    } else {
+        let stack = []
+        while (iterable.next()) {
+            let curr = iterable.next()
+            if (curr.type == endat.type && curr.value == endat.value && !stack.length) {
+                if (prev.value != '{') break
+            }
 
-        tokens.push(curr)
-        iterable.move()
+            if(curr.value == '[' || curr.value == '{' || curr.value == '(') {
+                stack.push(curr.value)
+            }
+
+            if(curr.value == '}' || curr.value == ']' || curr.value == ')') {
+                stack.pop()
+            }
+
+            tokens.push(curr)
+            iterable.move()
+            prev = curr
+        }
     }
 
     if (!iterable.next()) {
@@ -151,7 +168,7 @@ const to_post_fix_notation = (array) => {
             result.push(token)
         } else if (token.type == 'bracket') {
             if (token.value == '(') stack.push(token)
-            else if (token.value == ')') {  
+            else if (token.value == ')') {
                 while (stack[stack.length - 1].value != '(' && stack[stack.length - 1] != token.depth) {
                     result.push(stack.pop())
                 }
@@ -173,6 +190,22 @@ const to_post_fix_notation = (array) => {
                 })
 
                 result.push(array[i])
+            } else if (token.value == '{') {
+                for (let j = i + 1; j < array.length; j++) {
+                    if (array[j].type == 'bracket' && array[j].value == '}' && array[j].depth == array[i].depth) {
+                        foundIndex = j
+                        break
+                    }
+                }
+                if (foundIndex < 0) {
+                    throwError(new WaveGrassError('EOF Error', 'Unexpected end of input', array[i].col, array[i].line))
+                }
+
+                array.splice(i, 2, {
+                    type: 'object', values: parse_array(array.splice(i + 1, foundIndex - i - 1)), col: array[i].col, line: array[i].line
+                })
+
+                result.push(array[i])
             }
         } else if (token.value == '=' || token.value == ':') {
             array.splice(i, 1, {
@@ -189,7 +222,7 @@ const to_post_fix_notation = (array) => {
                 throwError(new WaveGrassError('Syntax Error', `Unexpected token '${find.value}'`, find.col, find.line))
             }
             result.push(array[i])
-        } else {
+        } else if(token.type !=  'delim') {
             if (['-', '+'].includes(token.value) && array[i + 1]) {
                 if (!array[i - 1]) {
                     token.value = '_' + token.value
@@ -229,6 +262,7 @@ const to_post_fix_notation = (array) => {
     return result
 }
 const parse_operators = (array) => {
+    if(!Array.isArray(array)) return array 
     if (array.length < 1) return { token: 'missing' }
     if (array.length == 1) return array[0]
     return { type: 'operation', value: to_post_fix_notation(array) }
@@ -251,7 +285,6 @@ const parse_params = (tokens) => {
 
     while (tokens.length) {
         if (tokens[i].value == ',' && !(depths['('] || depths['['] || depths['{'])) {
-
             let value = parse_operators(tokens.splice(0, i))
             params.push(value)
 
@@ -277,6 +310,26 @@ const parse_params = (tokens) => {
     return params
 }
 
+const parse_object = (tokens) => {
+    let obj = []
+    let groups = parse_array(tokens)
+        let index = 0;
+
+        console.log(groups)
+        for(const i in groups) {
+            let elem = groups[i].value
+
+            if(elem.length < 2) {
+                throwError()
+            }
+
+            let [key, value] = [elem[0], elem[1]]
+            if(value.type != 'symbol' || value.value != ':') {
+                throwError()
+            }
+        }
+}
+
 const parse_array = (tokens) => {
     let params = {}
     let i = 0;
@@ -294,7 +347,6 @@ const parse_array = (tokens) => {
 
             params[indexing++] = value
             tokens.shift()
-
             i = 0
         }
 
@@ -312,6 +364,7 @@ const parse_array = (tokens) => {
             params[indexing] = parse_operators(tokens.splice(0, tokens.length))
         }
     }
+
     return params
 }
 
@@ -336,7 +389,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
         if (!prev) throwError(new WaveGrassError('Syntax Error', 'Unexpected token \'=\'', curr.col, curr.line))
 
         if (prev.type != 'variable' && prev.type != 'array' && prev.type != 'property') {
-            prev.value ? throwError(new WaveGrassError('TypeError', 'Can only assign values to a variable', prev.value?.col ?? prev.col, prev.value?.line ??  prev.line)) : throwError(new WaveGrassError('TypeError', 'Can only assign values to a variable', prev.col, prev.line))
+            prev.value ? throwError(new WaveGrassError('TypeError', 'Can only assign values to a variable', prev.value?.col ?? prev.col, prev.value?.line ?? prev.line)) : throwError(new WaveGrassError('TypeError', 'Can only assign values to a variable', prev.col, prev.line))
         }
 
         if (prev.changeable == null) prev.changeable = true
@@ -382,7 +435,7 @@ const to_ast = (iterable, prev = null, endat, depth = 0) => {
             return to_ast(iterable, { type: 'return', value: parse_operators(accumulate_tokens(iterable, endat)), line: curr.line, col: curr.col }, endat, depth)
         } else if (curr.value == 'export') {
             return to_ast(iterable, { type: 'export', value: parse_params(accumulate_tokens(iterable, endat)), line: curr.line, col: curr.col }, endat, depth)
-        } else if(curr.value == 'import') {
+        } else if (curr.value == 'import') {
             return to_ast(iterable, { type: 'import', value: parse_params(accumulate_tokens(iterable, endat)), line: curr.line, col: curr.col }, endat, depth)
         } else if (curr.value == 'let') {
             return to_ast(iterable, { changeable: true }, endat, depth)

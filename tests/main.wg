@@ -1,3 +1,7 @@
-test = importJS('test.js')
+a = {
+    1: 2,
+    a: 2,
+}
 
-print(test(1, 2))
+print(a.a)
+print(JSON.toStr(a))
